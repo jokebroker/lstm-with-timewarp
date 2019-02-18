@@ -1,35 +1,51 @@
-# vanilla LSTM with some additions to validate 'Can Recurrent Neural Networks Warp Time?" - https://openreview.net/pdf?id=SJcKhk-Ab
+# LSTM with some additions to validate 'Can Recurrent Neural Networks Warp Time?" - https://openreview.net/pdf?id=SJcKhk-Ab
+# credit to https://github.com/waynemystir for base LSTM code
 
-import numpy as np
 #%matplotlib inline
 import numpy as np
+# import numpy as op
+# import cupy as np
 import matplotlib.pyplot as plt
 from IPython import display
 plt.style.use('seaborn-white')
 
 
-# Read and process data
+## Read and process data
+# Open file
+data = open('food.txt', 'r').read()
 
-data = open('lstm_food.txt', 'r').read()
-
+# Make an unorderd list of UNIQUE characters from the output of above
 chars = list(set(data))
+
+# Get the dims for later user - X_size = unique chars 
 data_size, X_size = len(data), len(chars)
 print("data has %d characters, %d unique" % (data_size, X_size))
+
+# Create two maps of unique chars in dataset <--> their number in index of unique chars
 char_to_idx = {ch:i for i,ch in enumerate(chars)}
 idx_to_char = {i:ch for i,ch in enumerate(chars)}
+# print(char_to_idx, "\n\n", idx_to_char)
 
 
-# Parameters
-
+## Parameters
+#  Embedding layer size (different sizes = )
 H_size = 100 # Size of the hidden layer
+
+#
 T_steps = 25 # Number of time steps (length of the sequence) used for training
+
+# Rate at which to move in the gradient direction
 learning_rate = 1e-1 # Learning rate
+
+#
 weight_sd = 0.1 # Standard deviation of weights for initialization
+
+# Hidden layer + number of unique chars X_size
 z_size = H_size + X_size # Size of concatenate(H, X) vector
 
 
-# Activations and derivs
-
+## Activations and derivs
+# All outputs 0 to 1, how much to 'let through' to cell state 
 def sigmoid(x):
     return 1 / (1 + np.exp(-x))
 
@@ -43,27 +59,30 @@ def dtanh(y):
     return 1 - y * y
 
 
-# Init weights
-
+## Init weights
+# Weight vector/bias scalar for forget gate, creates vector of  hidden layer size X (hidden layer size + input size)
 W_f = np.random.randn(H_size, z_size) * weight_sd + 0.5
 b_f = np.zeros((H_size, 1))
 
+# W/b for input gate
 W_i = np.random.randn(H_size, z_size) * weight_sd + 0.5
 b_i = np.zeros((H_size, 1))
 
+# W/b for CELL state (ops should be x and +)
 W_C = np.random.randn(H_size, z_size) * weight_sd
 b_C = np.zeros((H_size, 1))
 
+# W/b for output gate
 W_o = np.random.randn(H_size, z_size) * weight_sd + 0.5
 b_o = np.zeros((H_size, 1))
 
-#For final layer to predict the next character
+# W/b for final/output/y layer to predict the next character
 W_y = np.random.randn(X_size, H_size) * weight_sd
 b_y = np.zeros((X_size, 1))
 
 
-# Gradients
-
+## Gradients
+# all initialised with array of zeros in shape of x
 dW_f = np.zeros_like(W_f)
 dW_i = np.zeros_like(W_i)
 dW_C = np.zeros_like(W_C)
@@ -79,12 +98,14 @@ db_o = np.zeros_like(b_o)
 db_y = np.zeros_like(b_y)
 
 
+# Forward pass through model
 def forward(x, h_prev, C_prev):
     assert x.shape == (X_size, 1)
     assert h_prev.shape == (H_size, 1)
     assert C_prev.shape == (H_size, 1)
 
     z = np.row_stack((h_prev, x))
+    # z = np.concatenate((h_prev, x))
     f = sigmoid(np.dot(W_f, z) + b_f)
     i = sigmoid(np.dot(W_i, z) + b_i)
     C_bar = tanh(np.dot(W_C, z) + b_C)
@@ -188,6 +209,7 @@ def forward_backward(inputs, targets, h_prev, C_prev):
 
     return loss, h_s[len(inputs) - 1], C_s[len(inputs) - 1]
 
+# Take a sample from the trained model
 def sample(h_prev, C_prev, first_char_idx, sentence_length):
     x = np.zeros((X_size, 1))
     x[first_char_idx] = 1
@@ -251,7 +273,7 @@ iteration, p = 0, 0
 plot_iter = np.zeros((0))
 plot_loss = np.zeros((0))
 
-
+# Repeat until power dies
 while True:
     # Try catch for interruption
     try:
@@ -261,15 +283,16 @@ while True:
             g_C_prev = np.zeros((H_size, 1))
             p = 0
 
-
+        # Create representation of inputs, for idx of every char in data
         inputs = [char_to_idx[ch] for ch in data[p: p + T_steps]]
+        # Create rep of targets, i.e. idx of every SUBSEQUENT chat, i.e. for given char predict next char
         targets = [char_to_idx[ch] for ch in data[p + 1: p + T_steps + 1]]
-#        print("INPUTS typ({}) len({}) ins({})".format(type(inputs), len(inputs), inputs))
+        #print("INPUTS typ({}) len({}) ins({})".format(type(inputs), len(inputs), inputs))
 
         loss, g_h_prev, g_C_prev =  forward_backward(inputs, targets, g_h_prev, g_C_prev)
         smooth_loss = smooth_loss * 0.999 + loss * 0.001
 
-        # Print every hundred steps
+        # Print every hundred steps/iterations
         if iteration % 100 == 0:
             update_status(inputs, g_h_prev, g_C_prev)
 
